@@ -231,6 +231,37 @@ default_dayevent_alarm = timedelta(default='')
 # 'ikhal' only)
 enable_mouse = boolean(default=True)
 
+# If *True*, khal syncs with Google Calendar (see the [sync] section) before
+# running a command, provided an internet connection is available. A failing
+# sync only prints a warning, khal continues with the local data.
+auto_sync = boolean(default=False)
+
+# Maximum time in seconds a single sync may block (network timeout).
+sync_timeout = integer(default=30)
+
+
+# The sync section configures khal's built-in two-way Google Calendar sync
+# (``khal sync``). It needs an OAuth *Desktop app* client from the Google Cloud
+# Console with the Google Calendar API and CalDAV API enabled. Run
+# ``khal sync --login`` once to authorize.
+
+[sync]
+
+# OAuth client id and secret of your Google Cloud project.
+client_id = string(default=None)
+client_secret = string(default=None)
+
+# Which Google calendars to sync: *all* (every calendar of the account) or a
+# comma separated list of calendar ids (your gmail address for the main one).
+calendar_ids = force_list(default=list('all'))
+
+# The local directory holding one vdir per synced calendar. Configure it in the
+# [calendars] section as a ``discover`` calendar with the path ``<path>/*``.
+path = expand_path(default=None)
+
+# Where the OAuth refresh token is stored (readable by you only).
+token_path = expand_path(default='~/.local/share/khal/google_token.json')
+
 
 # The view section contains configuration options that effect the visual appearance
 # when using khal and ikhal.

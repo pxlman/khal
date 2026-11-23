@@ -10,6 +10,9 @@ may want to subscribe to `GitHub's tag feed
 0.14.2
 ======
 unreleased
+* NEW built-in two-way Google Calendar sync (``khal sync``, ``khal sync
+  --login``) with OAuth2 and no external tools, plus opt-in ``auto_sync`` and
+  ``sync_timeout`` settings
 * FIX ``khal import --format``/``-f`` was accepted and then ignored, always
   falling back to ``view.event_format``
 

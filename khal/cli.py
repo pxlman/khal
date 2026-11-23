@@ -32,6 +32,7 @@ import click_log
 
 from . import controllers, plugins
 from .cli_utils import (
+    _NoConfig,
     _select_one_calendar_callback,
     build_collection,
     calendar_option,
@@ -94,6 +95,28 @@ class _KhalGroup(click.Group):
         return super().get_command(ctx, name)
 
 
+_NO_AUTO_SYNC = {"configure", "sync"}
+
+
+def _maybe_auto_sync(ctx):
+    """Opt-in sync at startup; never fatal."""
+    conf = ctx.obj["conf"]
+    if isinstance(conf, _NoConfig) or ctx.invoked_subcommand in _NO_AUTO_SYNC:
+        return
+    if "--help" in sys.argv or "-h" in sys.argv or "--version" in sys.argv:
+        return
+    if not conf["default"]["auto_sync"]:
+        return
+    from . import sync as gsync
+
+    try:
+        gsync.sync_calendars(conf)
+    except gsync.SyncError as error:
+        click.echo(f"khal: auto-sync skipped: {error}", err=True)
+    except Exception as error:  # a broken sync must never block khal
+        click.echo(f"khal: auto-sync failed: {error}", err=True)
+
+
 @click.group(cls=_KhalGroup)
 @click_log.simple_verbosity_option("khal")
 @global_options
@@ -107,6 +130,7 @@ def cli(ctx, config):
         logger = logging.getLogger("khal")
         logger.handlers = [logging.FileHandler(ctx.logfilepath)]
     prepare_context(ctx, config)
+    _maybe_auto_sync(ctx)
 
 
 @cli.command()
@@ -565,6 +589,39 @@ def at(ctx, datetime, notstarted, format, day_format, json, include_calendar, ex
         logger.debug(error, exc_info=True)
         logger.fatal(error)
         sys.exit(1)
+
+
+@cli.command()
+@click.option("--login", is_flag=True, help="Authorize khal with your Google account.")
+@click.option("--no-browser", is_flag=True, help="Only print the login URL.")
+@click.pass_context
+def sync(ctx, login, no_browser):
+    """Two-way sync with Google Calendar (configure the [sync] section)."""
+    from pathlib import Path
+
+    from . import sync as gsync
+
+    conf = ctx.obj["conf"]
+    sc = conf["sync"]
+    try:
+        if login:
+            if not (sc["client_id"] and sc["client_secret"]):
+                raise gsync.SyncError("[sync] client_id and client_secret must be set")
+            gsync.login(
+                sc["client_id"], sc["client_secret"], Path(sc["token_path"]), not no_browser
+            )
+            click.echo("Login successful.")
+            return
+        stats = gsync.sync_calendars(conf)
+    except gsync.SyncError as error:
+        logger.fatal(f"sync failed: {error}")
+        sys.exit(1)
+    collection = build_collection(conf, None)
+    collection.update_db()
+    click.echo(
+        f"Synced {stats['calendars']} calendars: {stats['down']} downloaded, {stats['up']} uploaded, "
+        f"{stats['deleted']} deleted, {stats['conflicts']} conflicts."
+    )
 
 
 @cli.command()

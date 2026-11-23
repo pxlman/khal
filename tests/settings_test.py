@@ -71,6 +71,8 @@ class TestSettings:
                 "default_dayevent_alarm": dt.timedelta(0),
                 "show_all_days": False,
                 "enable_mouse": True,
+                "auto_sync": False,
+                "sync_timeout": 30,
             },
         }
         for key in comp_config:
@@ -131,6 +133,8 @@ class TestSettings:
                 "default_dayevent_duration": dt.timedelta(days=1),
                 "show_all_days": False,
                 "enable_mouse": True,
+                "auto_sync": False,
+                "sync_timeout": 30,
                 "default_event_alarm": dt.timedelta(0),
                 "default_dayevent_alarm": dt.timedelta(0),
             },

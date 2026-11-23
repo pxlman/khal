@@ -561,3 +561,24 @@ The command
 prints all events matching `party`.
 
 .. _str.format(): https://docs.python.org/3/library/string.html#formatstrings
+
+
+sync
+****
+Two-way sync with Google Calendar, without vdirsyncer. Create an OAuth client of
+type *Desktop app* in the Google Cloud Console (enable the Google Calendar API
+and CalDAV API), fill in the ``[sync]`` section of the config (see
+:doc:`configure`), then run::
+
+    khal sync --login   # once, opens the browser
+    khal sync           # every time you want to sync
+
+All calendars of the account are synced into one vdir each below the ``[sync]``
+``path`` (use ``calendar_ids`` to pick some), so configure that directory as a
+``discover`` calendar with the path ``<path>/*``. Calendar names and colors are
+taken from Google, read-only calendars are only pulled.
+
+Remote changes win on conflicts; the local version is kept as
+``<name>.ics.conflict`` next to the event. Set ``auto_sync = True`` in
+``[default]`` to sync automatically (with a short timeout) before each command
+when an internet connection is available.
