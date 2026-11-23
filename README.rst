@@ -23,6 +23,8 @@ Features
   example CalDAV_ servers.
 - built-in two-way sync with Google Calendar (OAuth2 + CalDAV), no other tools
   needed, see `Google Calendar sync`_
+- ``khal find`` filters events by date, time, text, tag and calendar, and
+  ``--llm`` prints simple JSON that small LLMs can use
 - fast and easy way to add new events
 - ikhal (interactive khal) lets you browse and edit calendars and events
 - no support for editing the timezones of events yet

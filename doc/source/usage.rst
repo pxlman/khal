@@ -620,3 +620,62 @@ undelete
 A deleted occurrence or series end is restored in place. A fully deleted event
 is recreated with a new UID, because Google never accepts the UID of a deleted
 event again. Nothing is lost, but it is a new event for any guests.
+
+
+find
+****
+Filter events by date, time, text, tag and calendar. Every filter is optional,
+they can be combined, and anything you leave out has a sensible default.
+::
+
+    khal find                                  # the next 7 days, starting today
+    khal find university                       # events about it, or in a calendar named so
+    khal find dentist --days 60
+    khal find university exam --from monday --days 5
+    khal find --date tomorrow --when morning
+    khal find --after 18:00 --before 22:00
+    khal find --all-day --days 30
+    khal find --list-calendars
+    khal find --list-tags --days 30
+
+Dates and range
+    ``--date`` is a single day. Otherwise the range starts at ``--from``
+    (default: today) and ends at ``--to`` (inclusive) or after ``--days`` days
+    (default 7). Dates can be ``YYYY-MM-DD``, ``today``, ``tomorrow``,
+    ``yesterday``, a weekday name like ``friday``, or a date in your configured
+    format. The range may be at most 366 days.
+Time of day
+    ``--after`` and ``--before`` (like ``14:30``, ``9am``) look at the time an
+    event *starts*, ``--when`` is a shortcut: ``morning`` 05-12, ``afternoon``
+    12-17, ``evening`` 17-22, ``night`` 22-05. All-day events are left out when
+    a time filter is used, ``--all-day`` shows only those.
+Search words
+    All words you give (``khal find university exam``) must match, and each one
+    may match anywhere in an event's title, notes, location, tags **or calendar
+    name**. ``khal find university`` therefore returns events that mention it
+    *and* every event of a calendar whose name contains it. ``--text`` does the
+    same as writing the words as arguments.
+Exact filters
+    For precise queries: ``--title`` only looks at the title, ``--tag`` matches a
+    tag exactly and ``--calendar`` matches part of a calendar name. ``--tag`` and
+    ``--calendar`` can be given several times (any of them matches).
+Limit
+    At most 50 events are returned, change it with ``--limit`` (0 = all).
+
+Output for LLMs and scripts
+===========================
+``--llm`` prints exactly one line of flat JSON instead of text for humans: ISO
+dates, 24 hour times, no formatting or locale. Errors are JSON as well (and the
+exit status is 1), so a program can always parse the output. Warnings go to
+stderr.
+::
+
+    $ khal find dentist --date tomorrow --llm
+    {"ok":true,"summary":"1 event on 2026-11-24 (text 'dentist').","range":{"from":"2026-11-24","to":"2026-11-24"},"filters":{"text":"dentist"},"total":1,"returned":1,"truncated":false,"events":[{"n":1,"title":"Dentist","date":"2026-11-24","weekday":"Tuesday","all_day":false,"start":"09:00","end":"10:00","calendar":"personal","location":"Clinic","tags":[],"repeats":false,"uid":"dentist@example.com"}]}
+
+    $ khal find --calendar holidays --llm
+    {"ok":false,"error":"No calendar matches \"holidays\".","available_calendars":["personal","work"]}
+
+Each event has a ``uid`` that can be passed to ``khal delete --uid``. ``summary``
+is a ready-made sentence and ``truncated`` tells whether more events matched
+than were returned.

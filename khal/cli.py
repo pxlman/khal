@@ -603,6 +603,70 @@ def at(ctx, datetime, notstarted, format, day_format, json, include_calendar, ex
         sys.exit(1)
 
 
+@cli.command()
+@click.option("--text", "-t", help="Same as giving the search words as arguments.")
+@click.option("--title", help="Words that must appear in the title.")
+@click.option("--tag", "-g", "tags", multiple=True, help="Only events with this tag (repeatable).")
+@click.option("--calendar", "-a", "calendars", multiple=True,
+              help="Only this calendar, a part of its name is enough (repeatable).")
+@click.option("--date", help="A single day: YYYY-MM-DD, today, tomorrow or a weekday name.")
+@click.option("--from", "date_from", help="First day (default: today).")
+@click.option("--to", "date_to", help="Last day, inclusive (default: --days after the first day).")
+@click.option("--days", type=int, help="How many days to show, counting the first one (default 7).")
+@click.option("--after", help="Only events that start at or after this time, like 14:30.")
+@click.option("--before", help="Only events that start before this time, like 12:00.")
+@click.option("--when", type=click.Choice(["morning", "afternoon", "evening", "night"]),
+              help="Shortcut for a time window: morning 05-12, afternoon 12-17, "
+                   "evening 17-22, night 22-05.")
+@click.option("--all-day", "only_all_day", is_flag=True, help="Only all-day events.")
+@click.option("--limit", type=int, default=50, show_default=True,
+              help="Maximum number of events to return, 0 for all.")
+@click.option("--llm", is_flag=True,
+              help="Output one line of simple JSON (ISO dates, 24h times) for scripts and LLMs.")
+@click.option("--list-calendars", is_flag=True, help="Only list the calendar names.")
+@click.option("--list-tags", is_flag=True, help="Only list the tags used in the date range.")
+@click.argument("query", nargs=-1)
+@click.pass_context
+def find(ctx, query, text, title, tags, calendars, date, date_from, date_to, days, after, before,
+         when, only_all_day, limit, llm, list_calendars, list_tags):
+    """Find events by date, time and search words; every filter is optional.
+
+    QUERY words must all match, each one anywhere in an event's title, notes,
+    location, tags or calendar name. So "university" finds events that mention
+    it as well as every event of a calendar named like that.
+
+    \b
+    Without any option: everything in the next 7 days, starting today.
+    Examples:
+      khal find university
+      khal find dentist --days 60
+      khal find university exam --from monday --days 5
+      khal find --date tomorrow --when morning
+      khal find --after 18:00 --llm
+    """
+    from . import find as finder
+
+    text = " ".join([*query, text] if text else query) or None
+
+    if llm:  # keep warnings about odd events out of the way
+        logging.getLogger("khal").setLevel(logging.ERROR)
+    try:
+        collection = build_collection(ctx.obj["conf"], None)
+        output = finder.run(
+            collection, ctx.obj["conf"], text=text, title=title, tags=tags, calendars=calendars,
+            date=date, date_from=date_from, date_to=date_to, days=days, after=after,
+            before=before, when=when, only_all_day=only_all_day, limit=limit, llm=llm,
+            list_calendars=list_calendars, list_tags=list_tags,
+        )
+    except FatalError as error:
+        if llm:
+            click.echo(finder.error_llm(error))
+        else:
+            logger.fatal(error)
+        sys.exit(1)
+    click.echo(output)
+
+
 @cli.command(name="delete")
 @multi_calendar_option
 @click.option("--this", "scope", flag_value="this", default=True,

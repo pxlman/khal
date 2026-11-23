@@ -10,6 +10,8 @@ may want to subscribe to `GitHub's tag feed
 0.14.2
 ======
 unreleased
+* NEW ``khal find`` to filter events by date, time, text, tag and calendar,
+  with ``--llm`` for simple single-line JSON output
 * NEW ``khal delete`` (``--this``, ``--following``, ``--all``; recurring and
   non-recurring) and ``khal undelete``
 * NEW built-in two-way Google Calendar sync (``khal sync``, ``khal sync
