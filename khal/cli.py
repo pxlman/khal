@@ -117,6 +117,18 @@ def _maybe_auto_sync(ctx):
         click.echo(f"khal: auto-sync failed: {error}", err=True)
 
 
+def _sync_after_change(ctx, what):
+    """push a local change right away if auto_sync is on (never fatal)"""
+    if not ctx.obj["conf"]["default"]["auto_sync"]:
+        return
+    from . import sync as gsync
+
+    try:
+        gsync.sync_calendars(ctx.obj["conf"])
+    except gsync.SyncError as error:
+        click.echo(f"khal: {what} locally, sync failed: {error}", err=True)
+
+
 @click.group(cls=_KhalGroup)
 @click_log.simple_verbosity_option("khal")
 @global_options
@@ -589,6 +601,52 @@ def at(ctx, datetime, notstarted, format, day_format, json, include_calendar, ex
         logger.debug(error, exc_info=True)
         logger.fatal(error)
         sys.exit(1)
+
+
+@cli.command(name="delete")
+@multi_calendar_option
+@click.option("--this", "scope", flag_value="this", default=True,
+              help="Delete only the next (or --at) occurrence. For events that do not "
+                   "repeat this is the whole event. This is the default.")
+@click.option("--following", "scope", flag_value="following",
+              help="Delete that occurrence and all later ones.")
+@click.option("--all", "scope", flag_value="all", help="Delete the whole event/series.")
+@click.option("--at", help="Pick the occurrence starting at this date/time.")
+@click.option("--uid", help="Select the event by its UID instead of searching.")
+@click.option("--days", default=60, show_default=True, help="How far ahead to look.")
+@click.option("--yes", "-y", is_flag=True, help="Do not ask for confirmation.")
+@click.argument("search_string", nargs=-1)
+@click.pass_context
+def delete_cmd(ctx, scope, at, uid, days, yes, search_string, include_calendar, exclude_calendar):
+    """Delete or cancel an event (works for recurring and non-recurring events)."""
+    try:
+        collection = build_collection(
+            ctx.obj["conf"], multi_calendar_select(ctx, include_calendar, exclude_calendar)
+        )
+        controllers.delete(
+            collection, ctx.obj["conf"], " ".join(search_string), uid, scope, at, days, yes
+        )
+    except FatalError as error:
+        logger.debug(error, exc_info=True)
+        logger.fatal(error)
+        sys.exit(1)
+    _sync_after_change(ctx, "deleted")
+
+
+@cli.command()
+@click.option("--list", "list_only", is_flag=True, help="Show what can be restored.")
+@click.argument("number", type=int, required=False)
+@click.pass_context
+def undelete(ctx, list_only, number):
+    """Restore the last deleted event (or pick one with NUMBER from --list)."""
+    try:
+        collection = build_collection(ctx.obj["conf"], None)
+        controllers.undelete(collection, ctx.obj["conf"], number, list_only)
+    except FatalError as error:
+        logger.fatal(error)
+        sys.exit(1)
+    if not list_only:
+        _sync_after_change(ctx, "restored")
 
 
 @cli.command()

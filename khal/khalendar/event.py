@@ -38,6 +38,7 @@ from pytz.tzinfo import StaticTzInfo
 from khal.custom_types import LocaleConfiguration
 from khal.exceptions import FatalError
 from khal.icalendar import cal_from_ics, delete_instance, invalid_timezone
+from khal.icalendar import _get_all_properties
 from khal.parse_datetime import timedelta2str
 from khal.plugins import FORMATTERS
 from khal.utils import generate_random_uid, is_aware, to_naive_utc, to_unix_time
@@ -387,7 +388,11 @@ class Event:
         calendar = self._create_calendar()
         tzs = []
         for vevent in self._vevents.values():
-            if hasattr(vevent["DTSTART"].dt, "tzinfo") and vevent["DTSTART"].dt.tzinfo is not None:
+            if (
+                hasattr(vevent["DTSTART"].dt, "tzinfo")
+                and vevent["DTSTART"].dt.tzinfo is not None
+                and vevent["DTSTART"].dt.tzinfo not in tzs
+            ):
                 tzs.append(vevent["DTSTART"].dt.tzinfo)
             if (
                 "DTEND" in vevent
@@ -839,6 +844,61 @@ class Event:
     def status(self) -> str:
         return self._vevents[self.ref].get("STATUS", "")
 
+    def truncate_series(self, instance: dt.datetime | dt.date) -> bool:
+        """end the series right before `instance`, dropping everything after it
+
+        Returns False if `instance` is the first occurrence (nothing would be
+        left, the caller should delete the whole event instead).
+        """
+        proto = self._vevents["PROTO"]
+        if "RRULE" not in proto:
+            raise ValueError("only series with a recurrence rule can be truncated")
+        dtstart = proto["DTSTART"].dt
+        is_date = not isinstance(dtstart, dt.datetime)
+        if is_date:
+            if instance <= dtstart:  # type: ignore[operator]
+                return False
+            until: dt.datetime | dt.date = instance - dt.timedelta(days=1)  # type: ignore[operator]
+            cutoff = float(dt.datetime.combine(instance, dt.time.min).timestamp())  # type: ignore[arg-type]
+        else:
+            if dtstart.tzinfo is not None and instance.tzinfo is None:  # type: ignore[union-attr]
+                raise ValueError("instance must be timezone aware")
+            if to_unix_time(instance) <= to_unix_time(dtstart):
+                return False
+            until = instance - dt.timedelta(seconds=1)  # type: ignore[operator]
+            if dtstart.tzinfo is not None:
+                until = until.astimezone(pytz.UTC)  # type: ignore[union-attr]
+            cutoff = to_unix_time(instance)
+
+        rrule = proto["RRULE"]
+        rrule.pop("COUNT", None)
+        rrule["UNTIL"] = [until]
+
+        def _later(value) -> bool:
+            if is_date:
+                day = value.date() if isinstance(value, dt.datetime) else value
+                return day >= instance  # type: ignore[operator]
+            if not isinstance(value, dt.datetime):
+                return False
+            return to_unix_time(value) >= cutoff
+
+        for prop in ("EXDATE", "RDATE"):
+            if prop in proto:
+                keep = [d for d in _get_all_dates(proto, prop) if not _later(d)]
+                proto.pop(prop)
+                if keep:
+                    proto.add(prop, keep)
+        for key in list(self._vevents):
+            if key == "PROTO":
+                continue
+            rid = self._vevents[key]["RECURRENCE-ID"].dt
+            try:
+                if _later(rid):
+                    self._vevents.pop(key)
+            except TypeError:
+                continue
+        return True
+
     @property
     def partstat(self) -> str | None:
         for attendee in self._vevents[self.ref].get("ATTENDEE", []):
@@ -1049,3 +1109,8 @@ def _create_timezone_static(tz: StaticTzInfo) -> icalendar.Timezone:
     subcomp.add("TZOFFSETFROM", tz._utcoffset)  # type: ignore
     timezone.add_component(subcomp)
     return timezone
+
+
+def _get_all_dates(vevent, prop: str) -> list:
+    """all dates/datetimes of an EXDATE/RDATE property (possibly given several times)"""
+    return list(_get_all_properties(vevent, prop))

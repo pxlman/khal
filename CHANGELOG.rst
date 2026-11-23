@@ -10,6 +10,8 @@ may want to subscribe to `GitHub's tag feed
 0.14.2
 ======
 unreleased
+* NEW ``khal delete`` (``--this``, ``--following``, ``--all``; recurring and
+  non-recurring) and ``khal undelete``
 * NEW built-in two-way Google Calendar sync (``khal sync``, ``khal sync
   --login``) with OAuth2 and no external tools, plus opt-in ``auto_sync`` and
   ``sync_timeout`` settings, see the new "Google Calendar sync" documentation

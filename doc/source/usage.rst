@@ -579,3 +579,44 @@ Options:
 
 The command exits with status 1 if the sync fails, e.g. when there is no
 internet connection. See :doc:`google-sync` for the setup and details.
+
+
+delete
+******
+Delete or cancel an event from the command line, for recurring and
+non-recurring events alike::
+
+    khal delete dentist                     # same as --this
+    khal delete gym --this                  # only the next occurrence
+    khal delete gym --this --at "friday 18:00"
+    khal delete gym --following             # this and all later occurrences
+    khal delete gym --all                   # the whole series
+    khal delete --uid <uid> --all -y        # scriptable, no prompts
+
+``--this`` (the default) deletes the event itself if it does not repeat, and
+only the chosen occurrence of a recurring one (an ``EXDATE`` is added).
+``--following`` ends the series right before that occurrence (it sets ``UNTIL``
+and drops later exceptions); from the first occurrence on it deletes everything.
+``--following`` and ``--all`` mean the same as ``--this`` for events that do not
+repeat. If several events match, khal shows a numbered list to choose from.
+
+Options: ``--at DATETIME`` (pick the occurrence starting then, default: the next
+one), ``--uid UID``, ``--days N`` (how far ahead to look, default 60) and
+``-y/--yes`` (no confirmation). With ``auto_sync`` enabled the change is pushed
+to Google immediately, otherwise run ``khal sync``.
+
+Every version khal deletes or changes this way is kept in
+:file:`~/.local/share/khal/trash` (a copy outside of your calendars, so syncing
+never sees it).
+
+undelete
+********
+::
+
+    khal undelete --list    # what can be restored
+    khal undelete           # restore the most recent one
+    khal undelete 3         # restore entry 3 of the list
+
+A deleted occurrence or series end is restored in place. A fully deleted event
+is recreated with a new UID, because Google never accepts the UID of a deleted
+event again. Nothing is lost, but it is a new event for any guests.

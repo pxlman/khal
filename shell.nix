@@ -2,6 +2,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 let
+  khal = pkgs.callPackage ./package.nix { };
   py = pkgs.python3.withPackages (ps: with ps; [
     click click-log icalendar urwid pyxdg pytz python-dateutil
     configobj tzlocal setproctitle
@@ -9,7 +10,7 @@ let
   ]);
 in
 pkgs.mkShell {
-  packages = [ py pkgs.git ];
+  packages = [ py pkgs.git khal ];
   shellHook = ''
     [ -d .venv ] || python -m venv --system-site-packages .venv
     . .venv/bin/activate

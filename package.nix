@@ -24,7 +24,7 @@ python3Packages.buildPythonApplication {
   nativeBuildInputs = [ installShellFiles ];
 
   nativeCheckInputs = with python3Packages; [ pytestCheckHook freezegun hypothesis packaging ] ++ [ vdirsyncer ];
-  enabledTestPaths = [ "tests/sync_test.py" "tests/settings_test.py" "tests/cli_test.py" ];
+  enabledTestPaths = [ "tests/delete_test.py" "tests/sync_test.py" "tests/settings_test.py" "tests/cli_test.py" ];
   disabledTests = [ "test_configure_command_cannot_write_config_file" "test_configure_command_cannot_create_vdir" ];
 
   postInstall = ''

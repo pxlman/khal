@@ -32,7 +32,7 @@ from shutil import get_terminal_size
 import pytz
 from click import confirm, echo, prompt, style
 
-from khal import __productname__, __version__, calendar_display, parse_datetime
+from khal import __productname__, __version__, calendar_display, parse_datetime, trash
 from khal.custom_types import (
     EventCreationTypes,
     LocaleConfiguration,
@@ -50,7 +50,7 @@ from .icalendar import sort_key as sort_vevent_key
 from .khalendar.vdir import Item
 from .parse_datetime import timedelta2str
 from .terminal import merge_columns
-from .utils import human_formatter, json_formatter
+from .utils import generate_random_uid, human_formatter, json_formatter
 
 logger = logging.getLogger("khal")
 
@@ -669,6 +669,163 @@ def edit(collection, search_string, locale, format=None, allow_past=False, conf=
         echo("".join(event_text))
         if not edit_event(event, collection, locale, allow_quit=True, width=term_width):
             return
+
+
+def _occurrences(collection, start: dt.datetime, end: dt.datetime) -> list:
+    local = collection._locale["local_timezone"]
+    events = list(collection.get_localized(local.localize(start), local.localize(end)))
+    events += list(collection.get_floating(start, end))
+    return sorted(events, key=lambda e: (e.start_local if not e.allday else local.localize(
+        dt.datetime.combine(e.start, dt.time.min)), e.uid))
+
+
+def _pick(collection, conf, search_string, uid, at, days, yes):
+    """find the occurrence the user means; returns the chosen occurrence"""
+    locale = conf["locale"]
+    local = locale["local_timezone"]
+    now = dt.datetime.now()
+    start = now - dt.timedelta(hours=12) if at is None else now - dt.timedelta(days=365)
+    end = now + dt.timedelta(days=days)
+    if at is not None:
+        end = max(end, now + dt.timedelta(days=366))
+
+    if uid:
+        uids = {uid}
+    elif search_string.strip():
+        uids = {e.uid for e in collection.search(search_string)}
+    else:
+        raise FatalError("Give a search string or --uid.")
+    candidates = [e for e in _occurrences(collection, start, end) if e.uid in uids]
+    if not candidates:
+        raise FatalError("No matching events found (try --days to look further ahead).")
+
+    if at is not None:
+        try:
+            wanted, allday = parse_datetime.guessdatetimefstr(at.split(), locale, in_future=False)
+        except DateTimeParseError as error:
+            raise FatalError(f"Cannot parse --at: {error}")
+        picked = []
+        for e in candidates:
+            if allday or e.allday:
+                if e.allday and e.start == wanted.date():
+                    picked.append(e)
+            elif abs((e.start_local.replace(tzinfo=None) - wanted).total_seconds()) < 60:
+                picked.append(e)
+        candidates = picked
+        if not candidates:
+            raise FatalError("No occurrence starts at that time.")
+    else:
+        now_local = local.localize(now)
+        upcoming = [
+            e for e in candidates
+            if (e.allday and e.end > now.date()) or (not e.allday and e.end_local > now_local)
+        ]
+        candidates = upcoming or candidates
+
+    firsts: dict = {}
+    for e in candidates:
+        firsts.setdefault(e.uid, e)
+    choices = list(firsts.values())
+    if len(choices) > 1:
+        fmt = conf["view"]["event_format"]
+        for i, e in enumerate(choices, 1):
+            echo(f"{i}. " + human_formatter(fmt)(e.attributes(relative_to=local.localize(now))))
+        if yes:
+            raise FatalError("Several events match, narrow the search or use --uid.")
+        index = prompt("Which one?", type=int, default=1)
+        if not 1 <= index <= len(choices):
+            raise FatalError("invalid choice")
+        chosen = choices[index - 1]
+    else:
+        chosen = choices[0]
+    return chosen
+
+
+def delete(
+    collection,
+    conf,
+    search_string="",
+    uid=None,
+    scope="this",
+    at=None,
+    days=60,
+    yes=False,
+):
+    """delete an event, or one/some/all occurrences of a recurring event
+
+    Works the same for recurring and non-recurring events: for a one-off event
+    `this`, `following` and `all` all mean the event itself. The previous
+    version is kept in the trash, see `undelete`.
+    """
+    local = conf["locale"]["local_timezone"]
+    now_local = local.localize(dt.datetime.now())
+    chosen = _pick(collection, conf, search_string, uid, at, days, yes)
+    event = collection.get_event(chosen.href, chosen.calendar)
+
+    echo(human_formatter(conf["view"]["event_format"])(chosen.attributes(relative_to=now_local)))
+    if not event.recurring:
+        scope, what = "all", "Delete this event?"
+    elif scope == "this":
+        what = "Delete this occurrence only?"
+    elif scope == "following":
+        what = "Delete this and all following occurrences?"
+    else:
+        what = "Delete the whole series?"
+    if not yes and not confirm(what, default=False):
+        return
+
+    original = event.raw
+    try:
+        if scope == "following" and "RRULE" not in event._vevents["PROTO"]:
+            raise FatalError("This event has no recurrence rule, use --this or --all.")
+        if scope == "this":
+            trash.save(event.calendar, event.href, original, "changed", event.summary, event.uid)
+            collection.delete_instance(event.href, event.etag, event.calendar, chosen.recurrence_id)
+            echo("Deleted this occurrence.")
+        elif scope == "following" and event.truncate_series(chosen.recurrence_id):
+            trash.save(event.calendar, event.href, original, "changed", event.summary, event.uid)
+            collection.update(event)
+            echo("Deleted this and all following occurrences.")
+        else:  # all, one-off events, or `following` from the first occurrence on
+            trash.save(event.calendar, event.href, original, "deleted", event.summary, event.uid)
+            collection.delete(event.href, event.etag, event.calendar)
+            echo("Deleted.")
+    except ReadOnlyCalendarError:
+        raise FatalError(f'Calendar "{event.calendar}" is read-only.')
+
+
+def undelete(collection, conf, number=None, list_only=False):
+    """bring back the last deleted (or restore the last changed) event"""
+    items = trash.entries()
+    if not items:
+        raise FatalError("The trash is empty.")
+    if list_only:
+        for i, (_, e) in enumerate(items[:20], 1):
+            echo(f"{i:2}. {e['time']}  {e['action']:8} {e['summary']}  [{e['calendar']}]")
+        return
+    index = (number or 1) - 1
+    if not 0 <= index < len(items):
+        raise FatalError("No such trash entry, see `khal undelete --list`.")
+    path, e = items[index]
+    calendar, ics = e["calendar"], e["ics"]
+    restored = None
+    if e["action"] == "changed":
+        try:
+            current = collection.get_event(e["href"], calendar)
+            restored = collection.create_event_from_ics(
+                ics, calendar, etag=current.etag, href=e["href"]
+            )
+            collection.update(restored)
+        except Exception:
+            restored = None
+    if restored is None:
+        # Google never accepts the UID of a deleted event again, so use a new one
+        new_uid = generate_random_uid()
+        ics = ics.replace("UID:" + e["uid"], "UID:" + new_uid)
+        restored = collection.create_event_from_ics(ics, calendar)
+        collection.insert(restored, calendar)
+    path.unlink(missing_ok=True)
+    echo(f"Restored: {e['summary']}")
 
 
 def interactive(collection, conf):
