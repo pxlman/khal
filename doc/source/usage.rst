@@ -565,20 +565,17 @@ prints all events matching `party`.
 
 sync
 ****
-Two-way sync with Google Calendar, without vdirsyncer. Create an OAuth client of
-type *Desktop app* in the Google Cloud Console (enable the Google Calendar API
-and CalDAV API), fill in the ``[sync]`` section of the config (see
-:doc:`configure`), then run::
+Two-way sync with Google Calendar, without vdirsyncer::
 
-    khal sync --login   # once, opens the browser
-    khal sync           # every time you want to sync
+    khal sync --login   # authorize khal, only needed once
+    khal sync           # sync all configured Google calendars
 
-All calendars of the account are synced into one vdir each below the ``[sync]``
-``path`` (use ``calendar_ids`` to pick some), so configure that directory as a
-``discover`` calendar with the path ``<path>/*``. Calendar names and colors are
-taken from Google, read-only calendars are only pulled.
+Options:
 
-Remote changes win on conflicts; the local version is kept as
-``<name>.ics.conflict`` next to the event. Set ``auto_sync = True`` in
-``[default]`` to sync automatically (with a short timeout) before each command
-when an internet connection is available.
+``--login``
+    Authorize khal with your Google account (opens the browser).
+``--no-browser``
+    With ``--login``, only print the authorization URL.
+
+The command exits with status 1 if the sync fails, e.g. when there is no
+internet connection. See :doc:`google-sync` for the setup and details.

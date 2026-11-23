@@ -21,6 +21,8 @@ Features
 - khal can read and write events/icalendars to vdir_, so vdirsyncer_ can be
   used to `synchronize calendars with a variety of other programs`__, for
   example CalDAV_ servers.
+- built-in two-way sync with Google Calendar (OAuth2 + CalDAV), no other tools
+  needed, see `Google Calendar sync`_
 - fast and easy way to add new events
 - ikhal (interactive khal) lets you browse and edit calendars and events
 - no support for editing the timezones of events yet
@@ -41,6 +43,36 @@ working) is via github or via IRC (#pimutils on Libera.Chat).
 .. _github: https://github.com/pimutils/khal/
 .. __: https://en.wikipedia.org/wiki/Comparison_of_CalDAV_and_CardDAV_implementations
 
+
+Google Calendar sync
+--------------------
+khal can sync with all your Google calendars on its own, without vdirsyncer_.
+Create an OAuth client of type *Desktop app* in the Google Cloud Console and
+enable the *Google Calendar API* and the *CalDAV API*. Then add this to your
+khal config:
+
+.. code-block:: ini
+
+    [sync]
+    client_id = <your client id>
+    client_secret = <your client secret>
+    calendar_ids = all
+    path = ~/.local/share/khal/calendars/google
+
+    [calendars]
+    [[google]]
+    path = ~/.local/share/khal/calendars/google/*
+    type = discover
+
+and authorize and sync with::
+
+    khal sync --login
+    khal sync
+
+Set ``auto_sync = True`` in the ``[default]`` section to sync before every
+command. See the `full guide`__ for details.
+
+.. __: https://khal.readthedocs.io/en/latest/google-sync.html
 
 Documentation
 -------------

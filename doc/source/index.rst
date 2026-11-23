@@ -13,6 +13,8 @@ Features
 - khal can read and write events/icalendars to vdir_, so vdirsyncer_ can be
   used to `synchronize calendars with a variety of other programs`__, for
   example CalDAV_ servers.
+- built-in two-way sync with Google Calendar, no other tools needed
+  (see :doc:`google-sync`)
 - fast and easy way to add new events
 - ikhal (interactive khal) lets you browse and edit calendars and events
 - only rudimentary support for creating and editing recursion rules
@@ -39,6 +41,7 @@ Table of Contents
    install
    configure
    usage
+   google-sync
    standards
    feedback
    hacking

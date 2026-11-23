@@ -54,7 +54,8 @@ calendar, a matching calendar section could look like this:
 
 Syncing
 -------
-To get :command:`khal` working with CalDAV you will first need to setup
+For Google Calendar :command:`khal` has a built-in two-way sync, see
+:doc:`google-sync`. For other CalDAV servers you will first need to setup
 vdirsyncer_.  After each start :command:`khal` will automatically check if
 anything has changed and automatically update its caching db (this may take some
 time after the initial sync, especially for large calendar collections).
